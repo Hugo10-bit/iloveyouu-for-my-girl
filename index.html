@@ -1,274 +1,456 @@
-import math as m
-import random as r
-import turtle as t
-import tkinter.font as tkf
+<!DOCTYPE html>
+<html lang="id">
 
-SC = 21
-OY = 20
-DURATION = 10
-TICK = 16
-ANIM = 42
-LIFT = 34
-GAP = 7
-SIZES = (9, 10, 11, 12)
-FONT = "Arial"
-BG = "#060208"
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Love Heart ❤️</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-s = t.Screen()
-s.setup(800, 800)
-s.bgcolor(BG)
-s.title("Love Heart")
-s.tracer(0)
+    body,
+    html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #060208;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
 
-cv = s.getcanvas()
-rng = r.Random(11)
+    canvas {
+      display: block;
+      touch-action: none;
+    }
 
-PHRASES = [
-    "I love you", "Seni seviyorum", "Te amo", "Je t'aime",
-    "Ich liebe dich", "Ti amo", "Eu te amo", "Я тебя люблю",
-    "사랑해", "愛してる", "我爱你", "मैं तुमसे प्यार करता हूँ",
-    "Σ' αγαπώ", "Ik hou van jou", "Jag älskar dig", "Kocham cię",
-    "ฉันรักเธอ", "Anh yêu em", "Aku cinta kamu", "Я тебе кохаю",
-]
+    .replay-btn {
+      position: fixed;
+      bottom: 24px;
+      padding: 10px 22px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #ffb8c6;
+      background: rgba(255, 75, 110, 0.15);
+      border: 1px solid rgba(255, 100, 130, 0.35);
+      border-radius: 999px;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: all 0.25s ease;
+      opacity: 0;
+      pointer-events: none;
+      box-shadow: 0 4px 20px rgba(255, 30, 70, 0.2);
+    }
 
-_fonts = {}
+    .replay-btn.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .replay-btn:hover {
+      background: rgba(255, 75, 110, 0.3);
+      border-color: rgba(255, 130, 160, 0.6);
+      color: #ffffff;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(255, 30, 70, 0.35);
+    }
+
+    .replay-btn:active {
+      transform: translateY(0);
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="heartCanvas"></canvas>
+  <button id="replayBtn" class="replay-btn">Putar Ulang ❤️</button>
+
+  <script>
+    const canvas = document.getElementById('heartCanvas');
+    const ctx = canvas.getContext('2d');
+    const replayBtn = document.getElementById('replayBtn');
+
+    const SC = 21;
+    const OY = 20;
+    const DURATION = 10;
+    const ANIM_FRAMES = 42;
+    const LIFT = 34;
+    const GAP = 7;
+    const SIZES = [9, 10, 11, 12];
+    const FONT_FAMILY = 'Arial, sans-serif';
+    const BG_HEX = '#060208';
+    const BGC = [6 / 255, 2 / 255, 8 / 255];
+    const FLASH = [1.0, 0.78, 0.78];
+    const WINE = [0.58, 0.0, 0.09];
+    const CRIMSON = [0.90, 0.05, 0.14];
+    const BLOOD = [0.98, 0.10, 0.16];
+
+    const PHRASES = [
+      "I love you", "Seni seviyorum", "Te amo", "Je t'aime",
+      "Ich liebe dich", "Ti amo", "Eu te amo", "Я тебя люблю",
+      "사랑해", "愛してる", "我爱你", "मैं तुमसे प्यार करता हूँ",
+      "Σ' αγαπώ", "Ik hou van jou", "Jag älskar dig", "Kocham cię",
+      "ฉันรักเธอ", "Anh yêu em", "Aku cinta kamu", "Я тебе кохаю"
+    ];
+
+    function createRng(seed = 11) {
+      let s = seed;
+      return function () {
+        s = (s * 9301 + 49297) % 233280;
+        return s / 233280;
+      };
+    }
+
+    function uniform(rng, min, max) {
+      return min + (max - min) * rng();
+    }
+
+    function choice(rng, arr) {
+      return arr[Math.floor(rng() * arr.length)];
+    }
+
+    function shuffle(rng, arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function heartMath(a) {
+      const sinA = Math.sin(a);
+      const x = 16 * Math.pow(sinA, 3);
+      const y = (
+        13 * Math.cos(a)
+        - 5 * Math.cos(2 * a)
+        - 2 * Math.cos(3 * a)
+        - Math.cos(4 * a)
+      );
+      return { x: x * SC, y: y * SC + OY };
+    }
+
+    function mix(a, b, k) {
+      return a.map((val, i) => val + (b[i] - val) * k);
+    }
+
+    function dim(c, k) {
+      return c.map(v => v * k);
+    }
+
+    function clamp(v, min = 0, max = 1) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    function rgbToHex(c) {
+      const r = Math.round(clamp(c[0]) * 255);
+      const g = Math.round(clamp(c[1]) * 255);
+      const b = Math.round(clamp(c[2]) * 255);
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    const POLY = [];
+    for (let i = 0; i < 720; i++) {
+      POLY.push(heartMath(2 * Math.PI * i / 720));
+    }
+    const EDGES = POLY.map((p, i) => [p, POLY[(i + 1) % POLY.length]]);
+    const YMAX = Math.max(...POLY.map(p => p.y));
+    const YMIN = Math.min(...POLY.map(p => p.y));
+    const CY = (YMAX + YMIN) / 2;
+
+    function spans(y) {
+      const xs = [];
+      for (const [p1, p2] of EDGES) {
+        if ((p1.y <= y && y < p2.y) || (p2.y <= y && y < p1.y)) {
+          xs.push(p1.x + (y - p1.y) * (p2.x - p1.x) / (p2.y - p1.y));
+        }
+      }
+      xs.sort((a, b) => a - b);
+      const res = [];
+      for (let i = 0; i < xs.length; i += 2) {
+        if (i + 1 < xs.length) res.push([xs[i], xs[i + 1]]);
+      }
+      return res;
+    }
+
+    function intersect(A, B) {
+      const out = [];
+      for (const a of A) {
+        for (const b of B) {
+          const lo = Math.max(a[0], b[0]);
+          const hi = Math.min(a[1], b[1]);
+          if (hi - lo > 14) {
+            out.push([lo, hi]);
+          }
+        }
+      }
+      return out;
+    }
+
+    function* phraseCycle(rng) {
+      while (true) {
+        const order = shuffle(rng, PHRASES);
+        for (const p of order) yield p;
+      }
+    }
+
+    function mathDist(x, y) {
+      return Math.hypot(x / (16 * SC), (y - CY) / (14.5 * SC));
+    }
+
+    function measureTextWidth(text, size) {
+      ctx.font = `bold ${size}px ${FONT_FAMILY}`;
+      return ctx.measureText(text).width;
+    }
+
+    function buildHeartLayout(rng) {
+      const cycle = phraseCycle(rng);
+      const rowHeight = 16;
+      const half = rowHeight / 2;
+      const placed = [];
+
+      let y = YMAX - half;
+      while (y > YMIN + half) {
+        const row = intersect(spans(y + half), spans(y - half));
+
+        for (let [lo, hi] of row) {
+          lo += 4;
+          hi -= 4;
+          let cur = lo + uniform(rng, 0, 8);
+          const line = [];
+
+          while (true) {
+            let fit = null;
+            for (let attempt = 0; attempt < 10; attempt++) {
+              const text = cycle.next().value;
+              const size = choice(rng, SIZES);
+              const w = measureTextWidth(text, size);
+              if (cur + w <= hi) {
+                fit = { text, size, w };
+                break;
+              }
+            }
+            if (!fit) break;
+            line.push([cur + fit.w / 2, fit.text, fit.size, fit.w]);
+            cur += fit.w + GAP;
+          }
+
+          if (line.length === 0) continue;
+
+          if (line.length > 1) {
+            const left = hi - (line[line.length - 1][0] + line[line.length - 1][3] / 2);
+            for (let i = 0; i < line.length; i++) {
+              line[i][0] += left * i / (line.length - 1);
+            }
+          } else {
+            line[0][0] = (lo + hi) / 2;
+          }
+
+          for (let i = 0; i < line.length; i++) {
+            const edge = (i === 0 || i === line.length - 1);
+            placed.push({
+              x: line[i][0],
+              y: y,
+              text: line[i][1],
+              size: line[i][2],
+              w: line[i][3],
+              edge: edge
+            });
+          }
+        }
+        y -= rowHeight;
+      }
+
+      for (const p of placed) {
+        const rad = Math.min(1.0, mathDist(p.x, p.y));
+        let base = mix(WINE, CRIMSON, 0.25 + 0.75 * rad);
+        base = mix(base, BLOOD, uniform(rng, 0, 0.35) + (p.edge ? 0.3 : 0));
+        p.color = base.map(v => Math.min(1.0, v));
+        p.rad = rad;
+      }
+
+      const edges = placed.filter(p => p.edge);
+      const inner = placed.filter(p => !p.edge);
+      edges.sort((a, b) => ((Math.atan2(a.x, a.y - CY) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) - (((Math.atan2(b.x, b.y - CY) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)));
+      inner.sort((a, b) => (-a.rad + uniform(rng, 0, 0.08)) - (-b.rad + uniform(rng, 0, 0.08)));
+
+      return edges.concat(inner);
+    }
 
 
-def font_for(size):
-    if size not in _fonts:
-        _fonts[size] = tkf.Font(
-            root=cv, family=FONT, size=size, weight="bold"
-        )
-    return _fonts[size]
+    let ORDER = [];
+    let placedItems = [];
+    let activeItems = [];
+    let spawnIndex = 0;
+    let spawnAcc = 0;
+    let isSpawning = true;
+    let rate = 0;
+    let shimmerList = [];
+    let scale = 1;
+    let dpr = 1;
+    let heartCenterX = 0;
+    let heartCenterY = 0;
+    let animationFrameId = null;
+
+    function resize() {
+      dpr = window.devicePixelRatio || 1;
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+
+      const targetDim = 720;
+      scale = Math.min((width * 0.95) / targetDim, (height * 0.9) / targetDim);
+      if (scale > 1.1) scale = 1.1;
+
+      heartCenterX = (width / 2);
+      heartCenterY = (height / 2) + (OY * scale);
+    }
+
+    function initAnimation() {
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      replayBtn.classList.remove('visible');
+
+      const rng = createRng(11);
+      ORDER = buildHeartLayout(rng);
+      rate = ORDER.length / (DURATION * 60);
+      spawnIndex = 0;
+      spawnAcc = 0;
+      isSpawning = true;
+      placedItems = [];
+      activeItems = [];
+      shimmerList = [];
+
+      lastTime = performance.now();
+      requestAnimationFrame(renderLoop);
+    }
+
+    function spawnItem(p) {
+      const rngLocal = Math.random;
+      const item = {
+        ...p,
+        f: 0,
+        dx: (rngLocal() - 0.5) * 20,
+        mainColor: p.color,
+        currentColor: p.color,
+        currentX: p.x,
+        currentY: -p.y,
+        currentAlpha: 0,
+        done: false,
+        shimmerEnd: 0
+      };
+      activeItems.push(item);
+      placedItems.push(item);
+    }
+
+    let lastTime = 0;
+
+    function renderLoop(currentTime) {
+      const dt = Math.min(currentTime - lastTime, 34);
+      lastTime = currentTime;
 
 
-def heart(a):
-    x = 16 * (m.sin(a) ** 3)
-    y = (
-        13 * m.cos(a)
-        - 5 * m.cos(2 * a)
-        - 2 * m.cos(3 * a)
-        - m.cos(4 * a)
-    )
-    return x * SC, y * SC + OY
+      if (isSpawning) {
+        spawnAcc += rate * (dt / 16.666);
+        while (spawnAcc >= 1 && spawnIndex < ORDER.length) {
+          spawnAcc -= 1;
+          spawnItem(ORDER[spawnIndex++]);
+        }
+        if (spawnIndex >= ORDER.length) {
+          isSpawning = false;
+        }
+      }
+
+      for (let i = activeItems.length - 1; i >= 0; i--) {
+        const p = activeItems[i];
+        p.f += (dt / 16.666);
+        const u = clamp(p.f / ANIM_FRAMES);
+        const e = 1 - Math.pow(1 - u, 3);
+        const hover = (1 - e) * LIFT;
+
+        p.currentX = p.x + p.dx * (1 - e);
+        p.currentY = -p.y - hover;
+
+        const flash = 0.75 * Math.sin(Math.PI * clamp((u - 0.55) / 0.45));
+        const blended = mix(mix(BGC, p.color, Math.pow(e, 1.5)), FLASH, flash);
+        p.currentColor = blended;
+        p.e = e;
+
+        if (u >= 1) {
+          p.currentX = p.x;
+          p.currentY = -p.y;
+          p.currentColor = p.color;
+          p.done = true;
+          shimmerList.push(p);
+          activeItems.splice(i, 1);
+        }
+      }
 
 
-def hx(c):
-    return "#%02x%02x%02x" % tuple(
-        int(max(0, min(1, v)) * 255) for v in c
-    )
+      if (!isSpawning && activeItems.length === 0) {
+        replayBtn.classList.add('visible');
+        if (shimmerList.length > 0 && Math.random() < 0.12) {
+          const target = choice(Math.random, shimmerList);
+          target.shimmerEnd = currentTime + 320;
+        }
+      }
+
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.fillStyle = BG_HEX;
+      ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      for (const p of placedItems) {
+        const scrX = heartCenterX + p.currentX * scale;
+        const scrY = heartCenterY + p.currentY * scale;
+        const fontSize = Math.max(7, p.size * scale);
+        ctx.font = `bold ${fontSize}px ${FONT_FAMILY}`;
+
+        if (!p.done) {
+          const haloCol = mix(BGC, dim(p.color, 0.20), (p.e || 1) * (p.e || 1));
+          ctx.fillStyle = rgbToHex(haloCol);
+          ctx.fillText(p.text, scrX, scrY);
+        }
 
 
-def mix(a, b, k):
-    return tuple(p + (q - p) * k for p, q in zip(a, b))
+        if (p.shimmerEnd && currentTime < p.shimmerEnd) {
+          const remain = (p.shimmerEnd - currentTime) / 320;
+          const shimFlash = Math.sin(remain * Math.PI) * 0.75;
+          ctx.fillStyle = rgbToHex(mix(p.color, FLASH, shimFlash));
+        } else {
+          ctx.fillStyle = rgbToHex(p.currentColor);
+        }
 
+        ctx.fillText(p.text, scrX, scrY);
+      }
 
-def dim(c, k):
-    return tuple(v * k for v in c)
+      ctx.restore();
+      animationFrameId = requestAnimationFrame(renderLoop);
+    }
 
+    window.addEventListener('resize', () => {
+      resize();
+    });
 
-POLY = [heart(2 * m.pi * i / 720) for i in range(720)]
-EDGES = list(zip(POLY, POLY[1:] + POLY[:1]))
-YMAX = max(p[1] for p in POLY)
-YMIN = min(p[1] for p in POLY)
-CY = (YMAX + YMIN) / 2
+    replayBtn.addEventListener('click', () => {
+      initAnimation();
+    });
 
+    resize();
+    initAnimation();
+  </script>
+</body>
 
-def spans(y):
-    xs = []
-    for (x1, y1), (x2, y2) in EDGES:
-        if (y1 <= y < y2) or (y2 <= y < y1):
-            xs.append(x1 + (y - y1) * (x2 - x1) / (y2 - y1))
-    xs.sort()
-    return list(zip(xs[0::2], xs[1::2]))
-
-
-def intersect(A, B):
-    out = []
-    for a in A:
-        for b in B:
-            lo, hi = max(a[0], b[0]), min(a[1], b[1])
-            if hi - lo > 14:
-                out.append((lo, hi))
-    return out
-
-
-def phrase_cycle():
-    while True:
-        order = PHRASES[:]
-        rng.shuffle(order)
-        yield from order
-
-
-def build():
-    cycle = phrase_cycle()
-    row_h = max(font_for(z).metrics("linespace") for z in SIZES) + 4
-    half = row_h / 2
-    placed = []
-
-    y = YMAX - half
-    while y > YMIN + half:
-        row = intersect(spans(y + half), spans(y - half))
-
-        for lo, hi in row:
-            lo += 4
-            hi -= 4
-            cur = lo + rng.uniform(0, 8)
-            line = []
-
-            while True:
-                fit = None
-                for _ in range(10):
-                    text = next(cycle)
-                    size = rng.choice(SIZES)
-                    w = font_for(size).measure(text)
-                    if cur + w <= hi:
-                        fit = (text, size, w)
-                        break
-                if not fit:
-                    break
-                text, size, w = fit
-                line.append([cur + w / 2, text, size, w])
-                cur += w + GAP
-
-            if not line:
-                continue
-
-            if len(line) > 1:
-                left = hi - (line[-1][0] + line[-1][3] / 2)
-                for i, it in enumerate(line):
-                    it[0] += left * i / (len(line) - 1)
-            else:
-                line[0][0] = (lo + hi) / 2
-
-            for i, (x, text, size, w) in enumerate(line):
-                edge = i == 0 or i == len(line) - 1
-                placed.append(dict(x=x, y=y, text=text, size=size, edge=edge))
-
-        y -= row_h
-
-    wine = (0.58, 0.0, 0.09)
-    crimson = (0.90, 0.05, 0.14)
-    blood = (0.98, 0.10, 0.16)
-    for p in placed:
-        rad = min(1.0, math_dist(p["x"], p["y"]))
-        base = mix(wine, crimson, 0.25 + 0.75 * rad)
-        base = mix(base, blood, rng.uniform(0, 0.35) + (0.3 if p["edge"] else 0))
-        p["color"] = tuple(min(1, v) for v in base)
-        p["rad"] = rad
-
-    edges = [p for p in placed if p["edge"]]
-    inner = [p for p in placed if not p["edge"]]
-    edges.sort(key=lambda p: m.atan2(p["x"], p["y"] - CY) % (2 * m.pi))
-    inner.sort(key=lambda p: -p["rad"] + rng.uniform(0, 0.08))
-    return edges + inner
-
-
-def math_dist(x, y):
-    return m.hypot(x / (16 * SC), (y - CY) / (14.5 * SC))
-
-
-FLASH = (1.0, 0.78, 0.78)
-main_ids = []
-active = []
-tick_no = 0
-
-
-def clamp(v):
-    return max(0.0, min(1.0, v))
-
-
-def spawn(p):
-    x, y = p["x"], -p["y"]
-    size, text, c = p["size"], p["text"], p["color"]
-    font = (FONT, size, "bold")
-    big = (FONT, size + 1, "bold")
-
-    shadow = cv.create_text(x + 2, y + 3, text=text, font=font, fill=BG)
-    halo = cv.create_text(x, y, text=text, font=big, fill=BG)
-    main = cv.create_text(x, y - LIFT, text=text, font=font, fill=BG)
-
-    p.update(shadow=shadow, halo=halo, main=main,
-             f=0, dx=rng.uniform(-10, 10))
-    main_ids.append((main, c))
-    active.append(p)
-
-
-def animate(p):
-    p["f"] += 1
-    u = clamp(p["f"] / ANIM)
-    e = 1 - (1 - u) ** 3
-    c = p["color"]
-    x, y = p["x"], -p["y"]
-    hover = (1 - e) * LIFT
-    px = x + p["dx"] * (1 - e)
-    py = y - hover
-
-    cv.itemconfig(p["shadow"], fill=hx(mix(BGC, dim(c, 0.30), e)))
-    cv.itemconfig(p["halo"], fill=hx(mix(BGC, dim(c, 0.20), e * e)))
-    cv.coords(p["halo"], px, py)
-
-    flash = 0.75 * math_sin(clamp((u - 0.55) / 0.45))
-    col = mix(mix(BGC, c, e ** 1.5), FLASH, flash)
-    cv.itemconfig(p["main"], fill=hx(col))
-    cv.coords(p["main"], px, py)
-
-    if u >= 1:
-        cv.coords(p["halo"], x, y)
-        cv.coords(p["main"], x, y)
-        cv.itemconfig(p["main"], fill=hx(c))
-        return False
-    return True
-
-
-def math_sin(v):
-    return m.sin(m.pi * v)
-
-
-BGC = tuple(int(BG[i:i + 2], 16) / 255 for i in (1, 3, 5))
-ORDER = build()
-items = iter(ORDER)
-RATE = len(ORDER) / (DURATION * 1000 / TICK)
-acc = 0.0
-spawning = True
-
-
-def step():
-    global spawning, acc
-    if spawning:
-        acc += RATE
-        try:
-            while acc >= 1:
-                acc -= 1
-                spawn(next(items))
-        except StopIteration:
-            spawning = False
-
-    active[:] = [p for p in active if animate(p)]
-
-    if not spawning and not active:
-        shimmer()
-        return
-    cv.after(TICK, step)
-
-
-def _safe(i, c):
-    try:
-        cv.itemconfig(i, fill=hx(c))
-    except Exception:
-        pass
-
-
-def shimmer():
-    for _ in range(1):
-        i, c = rng.choice(main_ids)
-        _safe(i, mix(c, FLASH, 0.6))
-        cv.after(260, lambda i=i, c=c: _safe(i, c))
-    cv.after(140, shimmer)
-
-
-try:
-    cv.after(200, step)
-    t.done()
-except (t.Terminator, Exception):
-    pass
+</html>
